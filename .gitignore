@@ -1,0 +1,4 @@
+.idea
+coverage
+.go-oif
+.golangci-lint

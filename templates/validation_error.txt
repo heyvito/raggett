@@ -1,0 +1,72 @@
+Validation Error
+HTTP {{ .Code }} at {{ .Method }} {{ .Path }}
+
+{{ if .ErrorType }}{{ .ErrorType }}: {{ end }}{{ .Message }}{{ if .ErrorPackage }} ({{ .ErrorPackage }}){{ end }}
+
+       Struct Name: {{ .StructName }}
+      Struct Field: {{ .StructField }}
+Request Field Name: {{ .RequestFieldName }}
+      Field Source: {{ .FieldSource }}
+        Error Kind: {{ .ErrorKind }}
+{{- if .OriginalError }}
+    Original Error: {{ .OriginalError -}}
+{{- end }}
+
+
+Request details
+===============
+
+  Query String
+  ~~~~~~~~~~~~
+
+{{- if .RequestDetails.Queries}}
+{{- range $key, $values := .RequestDetails.Queries }}
+  {{- range $_idx, $value := $values }}
+    {{ $key }}: {{ $value -}}
+  {{- end }}
+{{- end }}
+{{- else }}
+    * No query strings in request *
+{{- end }}
+
+  Form Fields
+  ~~~~~~~~~~~
+{{- if .RequestDetails.Form}}
+{{- range $key, $values := .RequestDetails.Form }}
+  {{- range $_idx, $value := $values }}
+    {{ $key }}: {{ $value -}}
+  {{- end }}
+{{- end }}
+{{- else }}
+    * No form in request *
+{{- end }}
+
+  Files
+  ~~~~~
+{{- if .RequestDetails.Files}}
+{{- range $key, $values := .RequestDetails.Files }}
+  {{- range $_idx, $value := $values }}
+    {{ $key }}: {{ $value -}}
+  {{- end }}
+{{- end }}
+{{- else }}
+    * No files in request *
+{{- end }}
+
+  Headers
+  ~~~~~~~
+{{- range $key, $values := .Headers }}
+  {{- range $_idx, $value := $values }}
+    {{ $key }}: {{ $value -}}
+  {{- end }}
+{{- end }}
+
+  Environment
+  ~~~~~~~~~~~
+{{- range $key, $value := .Environment }}
+    {{ $key }}: {{ $value -}}
+{{- end }}
+
+-------------------------------------
+This page was generated since Raggett is running in development mode.
+Set Development = false in your mux to disable it.

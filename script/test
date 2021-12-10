@@ -1,0 +1,5 @@
+#!/bin/bash
+rm -rf coverage
+mkdir coverage
+go test -covermode=count -coverprofile=./coverage/cover.out ./...
+go tool cover -html=./coverage/cover.out -o ./coverage/index.html

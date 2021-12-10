@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <title>HTTP {{.Code}}</title>
+        <style>
+            html {
+                max-width: 90ch;
+                padding: 3em 1em;
+                margin: auto;
+                font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+                font-size: 14px;
+                line-height: 1.5;
+                background-color: rgb(43, 42, 51);
+                color: #EEE;
+            }
+
+            h1,h2,h3,h4,h5,h6 {
+                margin: 3em 0 0em;
+            }
+
+            h1 + small {
+                margin-top: -3em;
+            }
+
+            h3 {
+                margin: 1em 0 0;
+            }
+
+            p,ul,ol {
+                margin-bottom: 2em;
+            }
+
+            pre.stacktrace {
+                margin-left: 1em;
+            }
+
+            tr > th {
+                padding-right: 5em;
+                text-align: left;
+            }
+
+            summary {
+                cursor: pointer;
+            }
+
+            hr {
+                border: 1px solid #ccc;
+            }
+
+            details {
+                margin-bottom: 1em;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>{{ .StatusName }}</h1>
+        <small>HTTP {{ .Code }} at <code>{{ .Method }} {{ .Path }}</code></small>
+        <hr/>
+        <p>The following routes are registered:</p>
+        <table>
+            <tr>
+                <th>Method</th>
+                <th>Pattern</th>
+                <th>Handler</th>
+            </tr>
+            {{ range $_idx, $r := .Routes }}
+            <tr>
+                <td>{{ $r.Method }}</td>
+                <td>{{ $r.Pattern }}</td>
+                <td>{{ $r.Handler }}</td>
+            </tr>
+            {{ end }}
+        </table>
+        <hr/>
+        <details>
+            <summary>Request details</summary>
+            <h3>Query String</h3>
+            {{if .RequestDetails.Queries}}
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                </tr>
+                {{ range $key, $values := .RequestDetails.Queries }}
+                    {{ range $_idx, $value := $values }}
+                        <tr><td><code>{{ $key }}</code></td> <td><code>{{ $value }}</code></td></tr>
+                    {{ end }}
+                {{ end }}
+            </table>
+            {{ else }}
+            <small class="muted">No query strings in request</small>
+            {{ end }}
+
+            <h3>Form Fields</h3>
+            {{if .RequestDetails.Form}}
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                </tr>
+                {{ range $key, $values := .RequestDetails.Form }}
+                    {{ range $_idx, $value := $values }}
+                        <tr><td><code>{{ $key }}</code></td> <td><code>{{ $value }}</code></td></tr>
+                    {{ end }}
+                {{ end }}
+            </table>
+            {{ else }}
+            <small class="muted">No form in request</small>
+            {{ end }}
+
+            <h3>Files</h3>
+            {{if .RequestDetails.Files}}
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                </tr>
+                {{ range $key, $values := .RequestDetails.Files }}
+                    {{ range $_idx, $value := $values }}
+                        <tr><td><code>{{ $key }}</code></td> <td><code>{{ $value }}</code></td></tr>
+                    {{ end }}
+                {{ end }}
+            </table>
+            {{ else }}
+            <small class="muted">No files in request</small>
+            {{ end }}
+        </details>
+
+        <details>
+            <summary>Headers</summary>
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                </tr>
+                {{ range $key, $values := .Headers }}
+                    {{ range $_idx, $value := $values }}
+                        <tr>
+                            <td><code>{{ $key }}</code></td>
+                            <td><code>{{ $value }}</code></td>
+                        </tr>
+                    {{ end }}
+                {{ end }}
+            </table>
+        </details>
+
+        <details>
+            <summary>Environment</summary>
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                </tr>
+                {{ range $key, $value := .Environment }}
+                    <tr>
+                        <td><code>{{ $key }}</code></td>
+                        <td><code>{{ $value }}</code></td>
+                    </tr>
+                {{ end }}
+            </table>
+        </details>
+        <hr/>
+        <small>This page was generated since Raggett is running in development mode. Set <code>Development = false</code> in your
+            mux to disable it.</small>
+    </body>
+</html>

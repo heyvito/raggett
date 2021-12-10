@@ -1,0 +1,6 @@
+{{ .StatusName }}
+
+An internal server error prevented this operation from completing.
+If you are the owner of this application, check the logs for more details.
+
+Request ID: {{ .RequestID }}

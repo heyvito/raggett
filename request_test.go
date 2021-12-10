@@ -1,0 +1,321 @@
+package raggett
+
+import (
+	"encoding/json"
+	"encoding/xml"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+)
+
+func TestRequest_SetStatus(t *testing.T) {
+	r := NewRequest(nil, nil)
+	r.SetStatus(http.StatusAccepted)
+	assert.True(t, r.statusSet)
+	assert.Equal(t, http.StatusAccepted, r.responseStatus)
+}
+
+func TestRequest_RespondJSON(t *testing.T) {
+	r := NewRequest(nil, nil)
+	r.RespondJSON(true)
+	v, ok := r.response.(*jsonResponse)
+	assert.True(t, ok)
+	d, ok := v.data.(bool)
+	assert.True(t, ok)
+	assert.True(t, d)
+}
+
+func TestRequest_RespondXML(t *testing.T) {
+	r := NewRequest(nil, nil)
+	r.RespondXML(true)
+	v, ok := r.response.(*xmlResponse)
+	assert.True(t, ok)
+	d, ok := v.data.(bool)
+	assert.True(t, ok)
+	assert.True(t, d)
+}
+
+func TestRequest_RespondReader(t *testing.T) {
+	reader := io.NopCloser(strings.NewReader("hello"))
+	r := NewRequest(nil, nil)
+	r.RespondReader(reader)
+	v, ok := r.response.(*fileResponse)
+	assert.True(t, ok)
+	assert.Equal(t, reader, v.file)
+}
+
+func TestRequest_RespondString(t *testing.T) {
+	r := NewRequest(nil, nil)
+	r.RespondString("foo")
+	v, ok := r.response.(*bytesResponse)
+	assert.True(t, ok)
+	assert.Equal(t, []byte("foo"), v.response)
+}
+
+func TestRequest_RespondBytes(t *testing.T) {
+	r := NewRequest(nil, nil)
+	r.RespondBytes([]byte("foo"))
+	v, ok := r.response.(*bytesResponse)
+	assert.True(t, ok)
+	assert.Equal(t, []byte("foo"), v.response)
+}
+
+func TestRequest_SetContentType(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := NewRequest(w, nil)
+	r.SetContentType("text/plain")
+	assert.True(t, r.setContentType)
+	assert.Equal(t, "text/plain", w.Header().Get("Content-Type"))
+}
+
+func TestRequest_AddHeader(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := NewRequest(w, nil)
+	r.AddHeader("foo", "bar")
+	r.AddHeader("foo", "baz")
+	assert.Equal(t, http.Header(map[string][]string{"Foo": {"bar", "baz"}}), w.Header())
+}
+
+func TestRequest_Abort(t *testing.T) {
+	r := NewRequest(nil, nil)
+	assert.PanicsWithError(t, errAbortRequest.Error(), r.Abort)
+}
+
+func TestRequest_NotFound(t *testing.T) {
+	r := NewRequest(nil, nil)
+	assert.PanicsWithError(t, errAbortNotFound.Error(), r.NotFound)
+}
+
+func TestRequest_ClientAccepts(t *testing.T) {
+	httpReq := httptest.NewRequest("GET", "/", nil)
+	httpReq.Header.Set("Accept", "foo/bar")
+	r := NewRequest(nil, httpReq)
+	accept := r.ClientAccepts()
+	require.Len(t, accept, 1)
+	media := accept[0]
+	assert.Equal(t, MediaTypeSpecificityFullyDefined, media.Specificity)
+	assert.Equal(t, "foo", media.TypeString)
+	assert.Equal(t, "bar", media.SubTypeString)
+	assert.NotNil(t, r.acceptsMemo)
+	assert.Equal(t, accept, r.ClientAccepts())
+}
+
+type customJSONEncoder struct{}
+
+func (c *customJSONEncoder) RespondsToMediaTypes() []MediaType {
+	return []MediaType{MediaTypeFromString("application", "json")}
+}
+
+func (c *customJSONEncoder) HandleMediaTypeResponse(mt MediaType, w io.Writer) error {
+	if mt.Type() == "application/json" {
+		return json.NewEncoder(w).Encode(map[string]interface{}{"test": "yep"})
+	} else {
+		return fmt.Errorf("don't know that ditty: %s", mt.String())
+	}
+}
+
+func TestRequest_DoRespond(t *testing.T) {
+	t.Parallel()
+	httpReq := httptest.NewRequest("GET", "/", nil)
+	t.Run("Without body", func(t *testing.T) {
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r *EmptyRequest) error {
+			return nil
+		})
+		w := httptest.NewRecorder()
+		m.ServeHTTP(w, httpReq)
+		assert.Equal(t, http.StatusNoContent, w.Code)
+	})
+
+	t.Run("jsonResponse", func(t *testing.T) {
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r *EmptyRequest) error {
+			r.RespondJSON(map[string]string{"test": "yep"})
+			return nil
+		})
+
+		w := httptest.NewRecorder()
+		m.ServeHTTP(w, httpReq)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, jsonContentTypeString, w.Header().Get("Content-Type"))
+		assert.Equal(t, "{\"test\":\"yep\"}\n", w.Body.String())
+	})
+
+	t.Run("xmlResponse", func(t *testing.T) {
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r *EmptyRequest) error {
+			r.RespondXML(struct {
+				XMLName xml.Name `xml:"foo"`
+				Bar     string   `xml:"bar"`
+			}{Bar: "baz"})
+			return nil
+		})
+
+		w := httptest.NewRecorder()
+		m.ServeHTTP(w, httpReq)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, xmlContentTypeString, w.Header().Get("Content-Type"))
+		assert.Equal(t, "<foo><bar>baz</bar></foo>", w.Body.String())
+	})
+
+	t.Run("fileResponse", func(t *testing.T) {
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r *EmptyRequest) error {
+			r.RespondReader(io.NopCloser(strings.NewReader("test")))
+			return nil
+		})
+
+		w := httptest.NewRecorder()
+		m.ServeHTTP(w, httpReq)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, bytesContentTypeString, w.Header().Get("Content-Type"))
+		assert.Equal(t, "test", w.Body.String())
+	})
+
+	t.Run("bytesResponse", func(t *testing.T) {
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r *EmptyRequest) error {
+			r.RespondBytes([]byte("test"))
+			return nil
+		})
+
+		w := httptest.NewRecorder()
+		m.ServeHTTP(w, httpReq)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, bytesContentTypeString, w.Header().Get("Content-Type"))
+		assert.Equal(t, "test", w.Body.String())
+	})
+
+	t.Run("default case with JSON responder", func(t *testing.T) {
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r *EmptyRequest) error {
+			r.SetStatus(http.StatusCreated)
+			r.Respond(&customJSONEncoder{})
+			return nil
+		})
+
+		w := httptest.NewRecorder()
+		m.ServeHTTP(w, httpReq)
+		assert.Equal(t, http.StatusCreated, w.Code)
+		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+		assert.Equal(t, "{\"test\":\"yep\"}\n", w.Body.String())
+	})
+}
+
+var errStreamWrite = fmt.Errorf("error writing to stream")
+
+type brokenWriter struct {
+	header http.Header
+	status int
+}
+
+func (b *brokenWriter) Header() http.Header       { return b.header }
+func (b *brokenWriter) Write([]byte) (int, error) { return 0, errStreamWrite }
+func (b *brokenWriter) WriteHeader(s int)         { b.status = s }
+
+type dummyJSONResponder struct{}
+
+func (d dummyJSONResponder) JSON() interface{} {
+	return map[string]interface{}{"hello": "test"}
+}
+
+func TestEncoderFailure(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+
+	t.Run("jsonResponse", func(t *testing.T) {
+		writer := &brokenWriter{header: map[string][]string{}}
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r EmptyRequest) error {
+			r.RespondJSON(map[string]interface{}{"hello": "test"})
+			return nil
+		})
+
+		m.ServeHTTP(writer, req)
+		assert.Equal(t, http.StatusOK, writer.status)
+	})
+
+	t.Run("xmlResponse", func(t *testing.T) {
+		writer := &brokenWriter{header: map[string][]string{}}
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r EmptyRequest) error {
+			r.RespondXML(struct {
+				XMLName xml.Name `xml:"test"`
+				Hello   string   `xml:"hello"`
+			}{Hello: "test"})
+			return nil
+		})
+
+		m.ServeHTTP(writer, req)
+		assert.Equal(t, http.StatusOK, writer.status)
+	})
+
+	t.Run("fileResponse", func(t *testing.T) {
+		writer := &brokenWriter{header: map[string][]string{}}
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r EmptyRequest) error {
+			r.RespondReader(io.NopCloser(strings.NewReader("hello")))
+			return nil
+		})
+
+		m.ServeHTTP(writer, req)
+		assert.Equal(t, http.StatusOK, writer.status)
+	})
+
+	t.Run("bytesResponse", func(t *testing.T) {
+		writer := &brokenWriter{header: map[string][]string{}}
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r EmptyRequest) error {
+			r.RespondBytes([]byte("hello"))
+			return nil
+		})
+
+		m.ServeHTTP(writer, req)
+		assert.Equal(t, http.StatusOK, writer.status)
+	})
+
+	t.Run("genericResponder", func(t *testing.T) {
+		writer := &brokenWriter{header: map[string][]string{}}
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r EmptyRequest) error {
+			r.Respond(dummyJSONResponder{})
+			return nil
+		})
+
+		m.ServeHTTP(writer, req)
+		assert.Equal(t, http.StatusOK, writer.status)
+	})
+}
+
+type brokenReadCloser struct{}
+
+func (b *brokenReadCloser) Read(p []byte) (n int, err error) {
+	p[0] = 'a'
+	return 1, io.EOF
+}
+
+func (b *brokenReadCloser) Close() error { return fmt.Errorf("boom") }
+
+func TestStreamCloseError(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+
+	t.Run("jsonResponse", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r EmptyRequest) error {
+			assert.Equal(t, "*/*", r.ClientAccepts()[0].Type())
+			r.RespondReader(&brokenReadCloser{})
+			return nil
+		})
+
+		m.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, []byte("a"), w.Body.Bytes())
+	})
+}
