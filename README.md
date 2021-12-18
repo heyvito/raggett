@@ -1,4 +1,7 @@
 # Raggett
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/88d2c18bb8d94defb1dff2897b4e295e)](https://www.codacy.com/gh/heyvito/raggett/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=heyvito/raggett&amp;utm_campaign=Badge_Grade)
+[![Test](https://github.com/heyvito/raggett/actions/workflows/go.yaml/badge.svg)](https://github.com/heyvito/raggett/actions/workflows/go.yaml)
+[![CodeQL](https://github.com/heyvito/raggett/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/heyvito/raggett/actions/workflows/codeql-analysis.yml)
 
 > **Raggett** is an opinionated Go HTTP Server Framework
 
@@ -148,7 +151,6 @@ that can be attached directly to a field indicating that the request's body
 must be parsed and set it:
 
 ```go
-
 type SignUpRequest struct {
     *raggett.Request
     UserData struct {
