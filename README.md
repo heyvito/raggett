@@ -8,7 +8,7 @@
 ## Installing
 
 ```
-go get github.com/heyvito/raggett@v0.1.1
+go get github.com/heyvito/raggett@v0.1.2
 ```
 
 ## Usage
