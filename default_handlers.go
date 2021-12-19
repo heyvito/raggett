@@ -45,6 +45,7 @@ func (mx *Mux) defaultRuntimeErrorHandler(err error, w http.ResponseWriter, r *R
 		constrained: !mx.Development,
 	})
 }
+
 func (mx *Mux) defaultNotFoundHandler(w http.ResponseWriter, r *http.Request) {
 	// Here we don't have a Request object, since it didn't hit a responder.
 	// Let's create a minimal one and try to move along. The same happens to

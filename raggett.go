@@ -122,7 +122,7 @@ func NewMux(logger *zap.Logger) *Mux {
 
 func (mx *Mux) muxContextInjector(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), requestIDContextKey, mx.identifierGenerator)
+		ctx := context.WithValue(r.Context(), requestIDContextKey, mx.identifierGenerator())
 		handler.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -394,6 +394,9 @@ type muxContextKey struct {
 var requestIDContextKey = muxContextKey{key: "__raggett_request_mux"}
 
 func idForRequest(r *http.Request) string {
+	if r == nil {
+		return "undefined"
+	}
 	v := r.Context().Value(requestIDContextKey)
 	if id, ok := v.(string); !ok {
 		return "undefined"
