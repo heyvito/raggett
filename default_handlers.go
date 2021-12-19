@@ -1,8 +1,19 @@
 package raggett
 
-import "net/http"
+import (
+	"go.uber.org/zap"
+	"net/http"
+)
 
 func (mx *Mux) defaultValidationErrorHandler(err ValidationError, w http.ResponseWriter, r *Request) {
+	r.Logger.Error("Validation error serving request", zap.Error(err))
+
+	if r.flushedHeaders {
+		// Do not attempt to change the request in case we have already flushed
+		// headers.
+		return
+	}
+
 	vErr := validationErrorResponse{
 		err:         err,
 		r:           r,
@@ -10,12 +21,23 @@ func (mx *Mux) defaultValidationErrorHandler(err ValidationError, w http.Respons
 		constrained: !mx.Development,
 	}
 	r.SetStatus(vErr.status)
-	writeResponder(r, vErr)
 
+	if r.bodyAllowedForStatus() {
+		writeResponder(r, vErr)
+	}
 }
 
 func (mx *Mux) defaultRuntimeErrorHandler(err error, w http.ResponseWriter, r *Request) {
+	r.Logger.Error("Runtime error serving request", zap.Error(err))
+
+	if r.flushedHeaders {
+		// Do not attempt to change the request in case we have already flushed
+		// headers.
+		return
+	}
+
 	r.SetStatus(http.StatusInternalServerError)
+
 	writeResponder(r, errorResponse{
 		err:         err,
 		r:           r,
