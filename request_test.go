@@ -442,3 +442,19 @@ func TestResponseDoubleFlush(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code)
 	assert.Empty(t, w.Body)
 }
+
+func TestResponseWithCustomStatusNoBody(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Add("Accept", "application/json")
+
+	w := httptest.NewRecorder()
+	m := NewMux(zap.NewNop())
+	m.Get("/", func(r EmptyRequest) error {
+		r.SetStatus(http.StatusCreated)
+		return nil
+	})
+
+	m.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusCreated, w.Code)
+	assert.Empty(t, w.Body)
+}
