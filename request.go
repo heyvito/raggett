@@ -81,6 +81,31 @@ func newRequest(mux *Mux, w http.ResponseWriter, r *http.Request) *Request {
 	}
 }
 
+func (r *Request) statusForRequest() int {
+	if r.statusSet {
+		return r.responseStatus
+	}
+	if r.response == nil {
+		return http.StatusNoContent
+	} else {
+		return http.StatusOK
+	}
+}
+
+// Taken from Go's net/http/server.go
+func (r *Request) bodyAllowedForStatus() bool {
+	status := r.statusForRequest()
+	switch {
+	case status >= 100 && status <= 199:
+		return false
+	case status == 204:
+		return false
+	case status == 304:
+		return false
+	}
+	return true
+}
+
 // SetStatus defines which HTTP Status will be returned to the client. This
 // method does not write headers to the client.
 func (r *Request) SetStatus(httpStatus int) {
@@ -169,7 +194,7 @@ func (r *Request) Respond(value interface{}) {
 }
 
 func (r *Request) setContentTypeNoOverride(value string) {
-	if !r.statusSet {
+	if !r.setContentType {
 		r.httpResponse.Header().Set("Content-Type", value)
 	}
 }
@@ -198,6 +223,11 @@ func (r *Request) flushHeaders() {
 func (r *Request) doRespond() {
 	if r.response == nil {
 		r.flushHeaders()
+		return
+	}
+
+	if !r.bodyAllowedForStatus() && r.response != nil {
+		r.Logger.Warn("Response is set, but HTTP Status code does not allow a body to be present.", zap.Int("status", r.statusForRequest()))
 		return
 	}
 
