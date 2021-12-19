@@ -5,6 +5,8 @@ import (
 	"encoding/xml"
 	"io"
 	"net/http"
+	"runtime"
+	"strings"
 
 	"go.uber.org/zap"
 )
@@ -23,6 +25,10 @@ type bytesResponse struct {
 
 type xmlResponse struct {
 	data interface{}
+}
+
+type stringResponse struct {
+	data string
 }
 
 // EmptyRequest is a convenience type for a struct containing only a *Request
@@ -67,8 +73,8 @@ func newRequest(mux *Mux, w http.ResponseWriter, r *http.Request) *Request {
 		}
 	}
 
-	id := mux.identifierGenerator()
-	logger := mux.logger.With(zap.String("request-id", id))
+	id := idForRequest(r)
+	logger := mux.logger.With(zap.String("request_id", id))
 
 	return &Request{
 		HTTPRequest:    r,
@@ -106,9 +112,38 @@ func (r *Request) bodyAllowedForStatus() bool {
 	return true
 }
 
+// relevantCaller searches the call stack for the first function outside of
+// net/http and heyvito/raggett.
+// The purpose of this function is to provide more helpful error messages.
+// Taken from Go's net/http/server.go
+func relevantCaller() runtime.Frame {
+	pc := make([]uintptr, 16)
+	n := runtime.Callers(1, pc)
+	frames := runtime.CallersFrames(pc[:n])
+	var frame runtime.Frame
+	for {
+		frame, more := frames.Next()
+		if !strings.HasPrefix(frame.Function, "net/http.") && !strings.HasPrefix(frame.Function, "heyvito/raggett.") {
+			return frame
+		}
+		if !more {
+			break
+		}
+	}
+	return frame
+}
+
 // SetStatus defines which HTTP Status will be returned to the client. This
 // method does not write headers to the client.
 func (r *Request) SetStatus(httpStatus int) {
+	if r.flushedHeaders {
+		caller := relevantCaller()
+		r.Logger.Warn("Headers were already sent. Ignoring call to SetStatus.",
+			zap.String("function", caller.Function),
+			zap.String("file", caller.File),
+			zap.Int("line", caller.Line))
+		return
+	}
 	r.responseStatus = httpStatus
 	r.statusSet = true
 }
@@ -140,7 +175,7 @@ func (r *Request) RespondReader(file io.ReadCloser) {
 // RespondString returns a provided string to the client as the response body.
 // The contents will be sent to the client once the handler function returns.
 func (r *Request) RespondString(str string) {
-	r.RespondBytes([]byte(str))
+	r.response = &stringResponse{data: str}
 }
 
 // RespondBytes returns a provided byte slice to the client as the response
@@ -154,17 +189,41 @@ func (r *Request) RespondBytes(buffer []byte) {
 // request's response. Calling this function prevents Raggett from automatically
 // inferring the response's Content-Type.
 func (r *Request) SetContentType(contentType string) {
+	if r.flushedHeaders {
+		caller := relevantCaller()
+		r.Logger.Warn("Headers were already sent. Ignoring call to SetContentType.",
+			zap.String("function", caller.Function),
+			zap.String("file", caller.File),
+			zap.Int("line", caller.Line))
+		return
+	}
 	r.SetHeader("content-type", contentType)
 	r.setContentType = true
 }
 
 // SetHeader invokes http.Header.Set for the current request's response.
 func (r *Request) SetHeader(name, value string) {
+	if r.flushedHeaders {
+		caller := relevantCaller()
+		r.Logger.Warn("Headers were already sent. Ignoring call to SetHeader.",
+			zap.String("function", caller.Function),
+			zap.String("file", caller.File),
+			zap.Int("line", caller.Line))
+		return
+	}
 	r.httpResponse.Header().Set(name, value)
 }
 
 // AddHeader invokes http.Header.Add for the current request's response.
 func (r *Request) AddHeader(name, value string) {
+	if r.flushedHeaders {
+		caller := relevantCaller()
+		r.Logger.Warn("Headers were already sent. Ignoring call to AddHeader.",
+			zap.String("function", caller.Function),
+			zap.String("file", caller.File),
+			zap.Int("line", caller.Line))
+		return
+	}
 	r.httpResponse.Header().Add(name, value)
 }
 
@@ -227,6 +286,7 @@ func (r *Request) doRespond() {
 	}
 
 	if !r.bodyAllowedForStatus() && r.response != nil {
+		r.flushHeaders()
 		r.Logger.Warn("Response is set, but HTTP Status code does not allow a body to be present.", zap.Int("status", r.statusForRequest()))
 		return
 	}
@@ -261,7 +321,13 @@ func (r *Request) doRespond() {
 			r.Logger.Error("raggett: Failed to close file stream", zap.Error(err))
 			return
 		}
-
+	case *stringResponse:
+		r.setContentTypeNoOverride(plainTextContentTypeString)
+		r.flushHeaders()
+		if _, err := r.httpResponse.Write([]byte(v.data)); err != nil {
+			r.Logger.Error("raggett: Failed to write bytes to response", zap.Error(err))
+			return
+		}
 	case *bytesResponse:
 		r.setContentTypeNoOverride(bytesContentTypeString)
 		r.flushHeaders()

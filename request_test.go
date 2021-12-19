@@ -54,9 +54,9 @@ func TestRequest_RespondReader(t *testing.T) {
 func TestRequest_RespondString(t *testing.T) {
 	r := NewRequest(nil, nil)
 	r.RespondString("foo")
-	v, ok := r.response.(*bytesResponse)
+	v, ok := r.response.(*stringResponse)
 	assert.True(t, ok)
-	assert.Equal(t, []byte("foo"), v.response)
+	assert.Equal(t, "foo", v.data)
 }
 
 func TestRequest_RespondBytes(t *testing.T) {
@@ -193,6 +193,20 @@ func TestRequest_DoRespond(t *testing.T) {
 		assert.Equal(t, "test", w.Body.String())
 	})
 
+	t.Run("stringResponse", func(t *testing.T) {
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r *EmptyRequest) error {
+			r.RespondString("test")
+			return nil
+		})
+
+		w := httptest.NewRecorder()
+		m.ServeHTTP(w, httpReq)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, plainTextContentTypeString, w.Header().Get("Content-Type"))
+		assert.Equal(t, "test", w.Body.String())
+	})
+
 	t.Run("default case with JSON responder", func(t *testing.T) {
 		m := NewMux(zap.NewNop())
 		m.Get("/", func(r *EmptyRequest) error {
@@ -280,6 +294,18 @@ func TestEncoderFailure(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.status)
 	})
 
+	t.Run("stringResponse", func(t *testing.T) {
+		writer := &brokenWriter{header: map[string][]string{}}
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r EmptyRequest) error {
+			r.RespondString("hello")
+			return nil
+		})
+
+		m.ServeHTTP(writer, req)
+		assert.Equal(t, http.StatusOK, writer.status)
+	})
+
 	t.Run("genericResponder", func(t *testing.T) {
 		writer := &brokenWriter{header: map[string][]string{}}
 		m := NewMux(zap.NewNop())
@@ -318,4 +344,101 @@ func TestStreamCloseError(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, []byte("a"), w.Body.Bytes())
 	})
+}
+
+func TestWriteError(t *testing.T) {
+	// Here we want to flush headers and try to encode something right after.
+
+	t.Run("Runtime Error", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+
+		w := httptest.NewRecorder()
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r EmptyRequest) error {
+			r.SetStatus(http.StatusNoContent)
+			r.flushHeaders()
+			panic("boom")
+		})
+
+		m.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Empty(t, w.Body)
+	})
+
+	t.Run("Validation Error", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+
+		w := httptest.NewRecorder()
+		m := NewMux(zap.NewNop())
+		m.Get("/", func(r EmptyRequest) error {
+			r.SetStatus(http.StatusNoContent)
+			r.flushHeaders()
+			return ValidationError{
+				StructName:      "foo",
+				StructFieldName: "foo",
+				FieldName:       "foo",
+				FieldKind:       fieldKindHeader,
+				ErrorKind:       ValidationErrorKindParsing,
+				OriginalError:   nil,
+			}
+		})
+
+		m.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Empty(t, w.Body)
+	})
+}
+
+func TestSetHeaderAfterFlush(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+
+	w := httptest.NewRecorder()
+	m := NewMux(zap.NewNop())
+	m.Get("/", func(r EmptyRequest) error {
+		r.SetStatus(http.StatusNoContent)
+		r.flushHeaders()
+		r.SetHeader("foo", "bar")
+		r.SetContentType("foo/bar")
+		r.AddHeader("test", "test")
+		return nil
+	})
+
+	m.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Empty(t, w.Header().Get("foo"))
+	assert.Empty(t, w.Body)
+}
+
+func TestResponseWithWrongStatus(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+
+	w := httptest.NewRecorder()
+	m := NewMux(zap.NewNop())
+	m.Get("/", func(r EmptyRequest) error {
+		r.SetStatus(http.StatusNoContent)
+		r.RespondString("hello!")
+		return nil
+	})
+
+	m.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Empty(t, w.Body)
+}
+
+func TestResponseDoubleFlush(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+
+	w := httptest.NewRecorder()
+	m := NewMux(zap.NewNop())
+	m.Get("/", func(r EmptyRequest) error {
+		r.SetStatus(http.StatusNoContent)
+		r.flushHeaders()
+		r.SetStatus(http.StatusOK)
+		r.RespondString("hello!")
+		return nil
+	})
+
+	m.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Empty(t, w.Body)
 }
