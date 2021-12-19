@@ -1,8 +1,9 @@
 package raggett
 
 import (
-	"go.uber.org/zap"
 	"net/http"
+
+	"go.uber.org/zap"
 )
 
 func (mx *Mux) defaultValidationErrorHandler(err ValidationError, w http.ResponseWriter, r *Request) {
