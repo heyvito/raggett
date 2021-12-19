@@ -191,11 +191,7 @@ func (r *Request) ClientAccepts() []MediaType {
 }
 
 func (r *Request) flushHeaders() {
-	if !r.statusSet && r.response == nil {
-		r.httpResponse.WriteHeader(http.StatusNoContent)
-	} else {
-		r.httpResponse.WriteHeader(r.responseStatus)
-	}
+	r.httpResponse.WriteHeader(r.statusForRequest())
 	r.flushedHeaders = true
 }
 

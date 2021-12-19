@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
@@ -113,6 +114,7 @@ func NewMux(logger *zap.Logger) *Mux {
 	mx.methodNotAllowedHandler = mx.defaultMethodNotAllowedHandler
 
 	mx.internalMux.Use(mx.muxContextInjector)
+	mx.internalMux.Use(mx.requestLogger)
 	mx.internalMux.NotFound(mx.internalNotFoundDispatch)
 	mx.internalMux.MethodNotAllowed(mx.internalMethodNotAllowedDispatch)
 	return mx
@@ -122,6 +124,28 @@ func (mx *Mux) muxContextInjector(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), requestIDContextKey, mx.identifierGenerator)
 		handler.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (mx *Mux) requestLogger(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := idForRequest(r)
+		proxy := &responseProxy{
+			original: w,
+		}
+		mx.logger.Info("Request started",
+			zap.String("request_id", id),
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path))
+		w.Header().Set("Request-ID", id)
+		started := time.Now()
+		defer func() {
+			mx.logger.Info("Request finished",
+				zap.String("request_id", id),
+				zap.Int("status", proxy.status),
+				zap.Duration("duration", time.Since(started)))
+		}()
+		handler.ServeHTTP(proxy, r)
 	})
 }
 
