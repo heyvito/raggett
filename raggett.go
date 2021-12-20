@@ -3,6 +3,7 @@ package raggett
 import (
 	"context"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"time"
@@ -342,6 +343,14 @@ func (mx *Mux) handlerMetaFor(method, pattern string) *handlerMetadata {
 	return h
 }
 
+// Invoked when the client ends sending data too early
+func badRequestUnexpectedEOF(err error, r *Request) {
+	r.SetStatus(http.StatusBadRequest)
+	r.flushHeaders()
+	_, _ = r.httpResponse.Write([]byte("Unexpected EOF"))
+	r.Logger.Error("Rejecting request due to unexpected EOF", zap.Error(err))
+}
+
 func (mx *Mux) makeResponder(method, pattern string, handlerFn interface{}) func(w http.ResponseWriter, r *http.Request) {
 	meta, err := determineFuncParams(handlerFn)
 	if err != nil {
@@ -353,7 +362,10 @@ func (mx *Mux) makeResponder(method, pattern string, handlerFn interface{}) func
 		req := newRequest(mx, w, r)
 		runtimeErr := loadAndApplyMeta(meta, req)
 		if runtimeErr != nil {
-			if validationErr, ok := runtimeErr.(ValidationError); ok {
+			if runtimeErr == io.ErrUnexpectedEOF {
+				badRequestUnexpectedEOF(err, req)
+				return
+			} else if validationErr, ok := runtimeErr.(ValidationError); ok {
 				mx.validationErrorHandler(validationErr, w, req)
 			} else {
 				mx.errorHandler(runtimeErr, w, req)

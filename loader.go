@@ -2,6 +2,7 @@ package raggett
 
 import (
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"reflect"
@@ -276,8 +277,13 @@ func loadAndApplyMeta(meta *handlerMetadata, r *Request) error {
 		isMultipart := true
 		values := r.HTTPRequest.Form
 		if err != nil && err != http.ErrNotMultipart {
-			go r.mux.errorHandler(err, r.httpResponse, r)
+			if err == io.ErrUnexpectedEOF {
+				// let the caller handle it.
+				return err
+			}
+			r.mux.errorHandler(err, r.httpResponse, r)
 			return nil
+
 		} else if err == http.ErrNotMultipart {
 			isMultipart = false
 		} else if err == nil {
