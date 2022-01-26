@@ -150,18 +150,8 @@ func (mx *Mux) requestLogger(handler http.Handler) http.Handler {
 	})
 }
 
-func (mx *Mux) copy() *Mux {
-	return &Mux{
-		internalMux:             mx.internalMux,
-		errorHandler:            mx.errorHandler,
-		validationErrorHandler:  mx.validationErrorHandler,
-		notFoundHandler:         mx.notFoundHandler,
-		methodNotAllowedHandler: mx.methodNotAllowedHandler,
-		identifierGenerator:     mx.identifierGenerator,
-		logger:                  mx.logger,
-		Development:             mx.Development,
-		MaxMemory:               mx.MaxMemory,
-	}
+func (mx Mux) copy() *Mux {
+	return &mx
 }
 
 func (mx *Mux) internalNotFoundDispatch(w http.ResponseWriter, r *http.Request) {
@@ -184,6 +174,14 @@ func (mx *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // parent logger.
 func (mx *Mux) LogWith(opts ...zap.Field) {
 	mx.logger = mx.logger.With(opts...)
+}
+
+// UseLogOpts returns a Mux copy using the provided opts as the Logger options
+// without affecting the parent Logger instance.
+func (mx *Mux) UseLogOpts(opts ...zap.Field) *Mux {
+	newMx := mx.copy()
+	newMx.LogWith(opts...)
+	return newMx
 }
 
 // RequestIdentifierGenerator sets a function responsible for returning a unique
