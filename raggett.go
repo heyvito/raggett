@@ -66,7 +66,7 @@ type ValidationErrorHandlerFunc func(err ValidationError, w http.ResponseWriter,
 
 // RequestIdentifierGenerator represents a function that returns a unique
 // identifier for requests handled by the Mux.
-type RequestIdentifierGenerator func() string
+type RequestIdentifierGenerator func(*http.Request) string
 
 const (
 	defaultMaxMemory = 32 << 20 // 32 MB
@@ -123,7 +123,7 @@ func NewMux(logger *zap.Logger) *Mux {
 
 func (mx *Mux) muxContextInjector(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), requestIDContextKey, mx.identifierGenerator())
+		ctx := context.WithValue(r.Context(), requestIDContextKey, mx.identifierGenerator(r))
 		handler.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -393,7 +393,7 @@ func (mx *Mux) makeResponder(method, pattern string, handlerFn interface{}) func
 	}
 }
 
-func defaultRequestIDGenerator() string {
+func defaultRequestIDGenerator(*http.Request) string {
 	return uuid.NewString()
 }
 
