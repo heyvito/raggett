@@ -274,6 +274,11 @@ func (r *Request) ClientAccepts() []MediaType {
 	return head
 }
 
+// RequestID returns the unique identifier for the current request
+func (r *Request) RequestID() string {
+	return r.requestID
+}
+
 func (r *Request) flushHeaders() {
 	r.httpResponse.WriteHeader(r.statusForRequest())
 	r.flushedHeaders = true
