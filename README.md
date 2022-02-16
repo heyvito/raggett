@@ -8,7 +8,7 @@
 ## Installing
 
 ```
-go get github.com/heyvito/raggett@v0.1.3
+go get github.com/heyvito/raggett@v0.1.7
 ```
 
 ## Usage
@@ -223,7 +223,7 @@ internet.
 ```
 The MIT License (MIT)
 
-Copyright (c) 2021 Victor Gama de Oliveira
+Copyright (c) 2022 Victor Gama de Oliveira
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
