@@ -121,6 +121,19 @@ func (c *customJSONEncoder) HandleMediaTypeResponse(mt MediaType, w io.Writer) e
 	}
 }
 
+func TestRequest_Redirect(t *testing.T) {
+	m := NewMux(zap.NewNop())
+	m.Get("/", func(r *EmptyRequest) error {
+		r.Redirect("https://example.org")
+		return nil
+	})
+	w := httptest.NewRecorder()
+	httpReq := httptest.NewRequest("GET", "/", nil)
+	m.ServeHTTP(w, httpReq)
+	assert.Equal(t, http.StatusTemporaryRedirect, w.Code)
+	assert.Equal(t, "https://example.org", w.Header().Get("Location"))
+}
+
 func TestRequest_DoRespond(t *testing.T) {
 	t.Parallel()
 	httpReq := httptest.NewRequest("GET", "/", nil)
