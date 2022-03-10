@@ -148,6 +148,15 @@ func (r *Request) SetStatus(httpStatus int) {
 	r.statusSet = true
 }
 
+// Redirect sets the necessary headers and status for the client to be
+// redirected to another location. After calling this method, all headers will
+// be flushed and no response body can be provided.
+func (r *Request) Redirect(url string) {
+	r.SetStatus(http.StatusTemporaryRedirect)
+	r.AddHeader("Location", url)
+	r.flushHeaders()
+}
+
 // RespondJSON responds the provided data to the client using a JSON
 // Content-Type. The value will be written to the client once the handler
 // function returns.
