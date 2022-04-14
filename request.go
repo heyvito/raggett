@@ -213,7 +213,7 @@ func (r *Request) GetCookie(name string) (*http.Cookie, bool) {
 // *ChainedCookie. Panics in case the provided object is nil.
 func (r *Request) AddCookie(cookie interface{}) {
 	if cookie == nil {
-		panic("empty cookie provided to AddCookie")
+		panic("nil cookie provided to AddCookie")
 	}
 
 	switch c := cookie.(type) {

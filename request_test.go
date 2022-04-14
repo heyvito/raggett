@@ -105,18 +105,43 @@ func TestRequest_GetCookie(t *testing.T) {
 }
 
 func TestRequest_AddCookie(t *testing.T) {
-	w := httptest.NewRecorder()
-	r := NewRequest(w, nil)
-	r.AddCookie(Cookie("yummy_cookie", "choco").HTTPOnly().Secure())
-	r.AddCookie(Cookie("tasty_cookie", "strawberry").ExpiresIn(12 * time.Hour))
-	r.AddCookie(Cookie("stale_cookie", "").ExpiresNow())
-	assert.Equal(t, http.Header(map[string][]string{
-		"Set-Cookie": {
-			"yummy_cookie=choco; HttpOnly; Secure",
-			"tasty_cookie=strawberry; Max-Age=43200",
-			"stale_cookie=; Max-Age=0",
-		},
-	}), w.Header())
+	t.Run("Success", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := NewRequest(w, nil)
+		noPtrCookie := Cookie("tasty_cookie", "strawberry").ExpiresIn(12 * time.Hour)
+		commonCookie := http.Cookie{Name: "sweet_cookie", Value: "vanilla"}
+		otherCookie := &http.Cookie{Name: "yummy_cookie", Value: "choco"}
+
+		r.AddCookie(*noPtrCookie)
+		r.AddCookie(commonCookie)
+		r.AddCookie(otherCookie)
+		r.AddCookie(Cookie("stale_cookie", "").ExpiresNow())
+
+		assert.Equal(t, http.Header(map[string][]string{
+			"Set-Cookie": {
+				"tasty_cookie=strawberry; Max-Age=43200",
+				"sweet_cookie=vanilla",
+				"yummy_cookie=choco",
+				"stale_cookie=; Max-Age=0",
+			},
+		}), w.Header())
+	})
+
+	t.Run("No nil cookies", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := NewRequest(w, nil)
+		assert.PanicsWithValue(t, "nil cookie provided to AddCookie", func() {
+			r.AddCookie(nil)
+		})
+	})
+
+	t.Run("No weird cookies", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := NewRequest(w, nil)
+		assert.PanicsWithValue(t, "Unexpected value passed to AddCookie. Use http.Cookie or the result of ragget.Cookie(name, value).", func() {
+			r.AddCookie(1)
+		})
+	})
 }
 
 func TestRequest_Context(t *testing.T) {
