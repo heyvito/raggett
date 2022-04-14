@@ -1,5 +1,5 @@
 # Raggett
-
+[![codecov](https://codecov.io/gh/heyvito/raggett/branch/master/graph/badge.svg?token=BKKQ5K2FHG)](https://codecov.io/gh/heyvito/raggett)
 [![Test](https://github.com/heyvito/raggett/actions/workflows/go.yaml/badge.svg)](https://github.com/heyvito/raggett/actions/workflows/go.yaml)
 [![CodeQL](https://github.com/heyvito/raggett/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/heyvito/raggett/actions/workflows/codeql-analysis.yml)
 
