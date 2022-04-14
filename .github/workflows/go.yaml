@@ -20,8 +20,9 @@ jobs:
       - name: Lint
         run: script/lint
 
-      - name: Setup Codacy Environment Variable
-        run: echo "CODACY_PROJECT_TOKEN=${{ secrets.CODACY_PROJECT_TOKEN }}" >> $GITHUB_ENV
-
       - name: Test
         run: script/ci-test
+
+      - uses: codecov/codecov-action@v2
+        with:
+          fail_ci_if_error: true

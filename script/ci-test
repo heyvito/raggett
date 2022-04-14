@@ -1,6 +1,2 @@
 #!/bin/bash
-rm -rf coverage
-mkdir coverage
-go test -covermode=count -coverprofile=./coverage/cover.out ./...
-bash <(curl -Ls https://coverage.codacy.com/get.sh) report \
-    --force-coverage-parser go -r ./coverage/cover.out
+go test -covermode=count -coverprofile=coverage.txt ./...
