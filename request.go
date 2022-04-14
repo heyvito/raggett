@@ -1,6 +1,7 @@
 package raggett
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"io"
@@ -194,6 +195,41 @@ func (r *Request) RespondBytes(buffer []byte) {
 	r.response = &bytesResponse{response: buffer}
 }
 
+// GetCookie returns a cookie with a given name, along with a boolean indicating
+// whether the cookie is present in the request. When the returned boolean is
+// false, the returned cookie value is nil.
+func (r *Request) GetCookie(name string) (*http.Cookie, bool) {
+	for _, c := range r.HTTPRequest.Cookies() {
+		if c.Name == name {
+			return c, true
+		}
+	}
+	return nil, false
+}
+
+// AddCookie adds a given cookie to the request. This method accepts either
+// a (*)http.Cookie, or the result of invoking Cookie. Panics in case the
+// provided value is not a http.Cookie, *http.Cookie, ChainedCookie or
+// *ChainedCookie. Panics in case the provided object is nil.
+func (r *Request) AddCookie(cookie interface{}) {
+	if cookie == nil {
+		panic("empty cookie provided to AddCookie")
+	}
+
+	switch c := cookie.(type) {
+	case http.Cookie:
+		r.AddHeader("Set-Cookie", c.String())
+	case *http.Cookie:
+		r.AddHeader("Set-Cookie", c.String())
+	case *ChainedCookie:
+		r.AddHeader("Set-Cookie", c.cookie.String())
+	case ChainedCookie:
+		r.AddHeader("Set-Cookie", c.cookie.String())
+	default:
+		panic("Unexpected value passed to AddCookie. Use http.Cookie or the result of ragget.Cookie(name, value).")
+	}
+}
+
 // SetContentType defines the value for the Content-Type header for this
 // request's response. Calling this function prevents Raggett from automatically
 // inferring the response's Content-Type.
@@ -250,6 +286,11 @@ func (r *Request) NotFound() {
 // AbortError aborts the current request with a provided error.
 func (r *Request) AbortError(err error) {
 	panic(err)
+}
+
+// Context is a convenience method for r.HTTPRequest.Context()
+func (r *Request) Context() context.Context {
+	return r.HTTPRequest.Context()
 }
 
 // Respond sets the response value for this Request to the provided value. Use
