@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -81,6 +82,48 @@ func TestRequest_AddHeader(t *testing.T) {
 	r.AddHeader("foo", "bar")
 	r.AddHeader("foo", "baz")
 	assert.Equal(t, http.Header(map[string][]string{"Foo": {"bar", "baz"}}), w.Header())
+}
+
+func TestRequest_GetCookie(t *testing.T) {
+	w := httptest.NewRecorder()
+	httpReq := httptest.NewRequest("POST", "/test", nil)
+	httpReq.Header.Add("Cookie", "yummy_cookie=choco; tasty_cookie=strawberry")
+	r := NewRequest(w, httpReq)
+	choco, ok := r.GetCookie("yummy_cookie")
+	assert.True(t, ok)
+	assert.Equal(t, "yummy_cookie", choco.Name)
+	assert.Equal(t, "choco", choco.Value)
+	straw, ok := r.GetCookie("tasty_cookie")
+	assert.True(t, ok)
+	assert.Equal(t, "tasty_cookie", straw.Name)
+	assert.Equal(t, "strawberry", straw.Value)
+
+	// No stale cookies!
+	stale, ok := r.GetCookie("stale_cookie")
+	assert.False(t, ok)
+	assert.Nil(t, stale)
+}
+
+func TestRequest_AddCookie(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := NewRequest(w, nil)
+	r.AddCookie(Cookie("yummy_cookie", "choco").HTTPOnly().Secure())
+	r.AddCookie(Cookie("tasty_cookie", "strawberry").ExpiresIn(12 * time.Hour))
+	r.AddCookie(Cookie("stale_cookie", "").ExpiresNow())
+	assert.Equal(t, http.Header(map[string][]string{
+		"Set-Cookie": {
+			"yummy_cookie=choco; HttpOnly; Secure",
+			"tasty_cookie=strawberry; Max-Age=43200",
+			"stale_cookie=; Max-Age=0",
+		},
+	}), w.Header())
+}
+
+func TestRequest_Context(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	r := NewRequest(w, req)
+	assert.Equal(t, req.Context(), r.Context())
 }
 
 func TestRequest_Abort(t *testing.T) {
